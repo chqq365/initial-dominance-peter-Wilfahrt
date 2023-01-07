@@ -45,23 +45,19 @@ anova.tablefunc <- function(mod) {
 }
 
 ## Read in data
-setwd("/Users/wilf0020/Library/CloudStorage/Dropbox/NutNet data")
-files<-list.files()
-# coverfile<-files[grep("full-cover-", files)]
-# coverfile<-last(coverfile)
-# original_coverdat <- read_csv(coverfile)
+setwd("H:/other NutNet papers/peter Wilfahrt/")
 
-original_coverdat <- read.csv('/Users/wilf0020/Library/CloudStorage/Dropbox/Peter/Cover and biomass by date/full-cover-by-date-2022-10-10.csv')
+original_coverdat <- read.csv('full-cover-by-date-2022-10-10.csv')
 coverdat <- original_coverdat # backup
-
 dim(coverdat)
 # 305412   x  21 - sorted by date
 
-comb_file<-files[grep("comb-by-plot-clim-soil-diversity", files)]
-comb_file<-last(comb_file)
-original_comb <- read_csv(comb_file)
-comb <- original_comb # backup
+original_comb <- read_csv("comb-by-plot-clim-soil-diversity-2022-11-15.csv")
+comb<-original_comb
 
+# QC: I heard from Jon Bakker he updates his function for each version of the cover data release and he suggests that we should use the corresponding taxa adjutment file
+# there is a new version of taxonomic-adjustments in the dropbox 
+# https://www.dropbox.com/home/qingqing%20chen/NutNet%20data?preview=site-taxonomy-2022-07-13.csv
 cover_fix <- read_csv('https://github.com/jon-bakker/NutNet_TaxonomicAdjustments/raw/main/taxonomic-adjustments-2022-05-02.csv')
 
 # choose all experimental sites, with at least an N treatment, 1 year post-treatment:
@@ -72,10 +68,7 @@ sites <-unique(comb$site_code[comb$trt %in% c("NPK", "Fence") # at least an NPK 
 
 
 length(sites)
-sort(sites)
 
-
-# 95
 # just the sites we want
 working_coverdat <- coverdat[coverdat$site_code %in% sites,]
 
@@ -90,25 +83,16 @@ site.miss <- sites[!sites %in%  unique(working_coverdat$site_code[working_coverd
 
 sites <- sort(unique(working_coverdat$site_code[working_coverdat$year_trt == 0]))
 
-#89 sites
-
 working_coverdat <- coverdat[coverdat$site_code %in% sites,]
 
 
-# write.csv(sites,
-#           '/Users/wilf0020/Library/Mobile Documents/com~apple~CloudDocs/Documents/NutNet manuscripts/Initial dominance/Data/site list.csv')
-
-
 # reduce to just vascular plants
+# maybe also change species with cover > 100 to 100 according to Jon Bakker, you also mentioned in your script that cover has a maximum of 100 
 working_coverdat <- droplevels(working_coverdat) %>% 
   filter(live == 1, !functional_group %in% c('BRYOPHYTE','LICHEN','LIVERWORT'), max_cover != 0) %>% 
   group_by(site_code) %>% 
   mutate(max_year = max(year_trt))  ##  add in max years
-
-
-# working_coverdat[working_coverdat$Taxon == 'RUMEX SP.',]$local_lifespan <- 'PERENNIAL'
-# working_coverdat %>% filter(substr(Taxon,1,5) == 'RUMEX' & site_code == 'yarra.au')
-
+range(working_coverdat$max_cover)
 
 ### reduce functional groups
 working_coverdat$functional_group <- ifelse(working_coverdat$functional_group %in% c('GRASS','GRAMINOID'), 'GRAMINOID',working_coverdat$functional_group)
@@ -190,8 +174,8 @@ working_coverdat %>%
   dplyr::select(plot, year_trt, Taxon, max_cover, local_lifespan)
 
 #### take only maximum cover value when multiple are present in a year (for some taxa fixes and sites with multiple sampling dates)
-
-cover_max <- working_coverdat %>% 
+# QC: not sure about this, I think it makes more sense that cover from all species within plots should be measured at similar time
+# QC: it does not make sense to "construct" a community using cover of species A in September and cover of species B in Summer
   group_by(site_code,year_trt,plot,Taxon) %>% 
   slice_max(order_by = max_cover,with_ties = FALSE)
 
@@ -263,12 +247,6 @@ cover_pre <- working_coverdat[working_coverdat$year_trt == 0 & working_coverdat$
   mutate(avgRankPerc = mean(perc_rank)) %>%
   mutate(plotfreq = plotfreq_yr) %>%
   ungroup
-# 
-# range(cover_pre$avgCover)
-# hist(cover_pre$avgCover)
-# 
-# range(cover_pre$avgRankPerc)
-# hist(cover_pre$avgRankPerc)
 
 
 ### create initial dominance data.frame
@@ -280,41 +258,12 @@ initial_dominants <- working_coverdat %>%
   slice_max(order_by = max_cover,with_ties = TRUE) %>%   # TRUE allows ties (multiple dominants per plot)
   mutate(initial_rel_cover = cover, initial_abs_cover = max_cover) %>% 
   dplyr::select(site_code,plot,Taxon,initial_rel_cover,initial_abs_cover) 
-  # summarize(Taxon = Taxon[which.max(cover)], initial_abs_cover = max_cover[which.max(cover)], 
-  #           initial_rel_cover = cover[which.max(cover)])
-  # 2715 with_ties = FALSE
-  # 2947 with ties = TRUE
-
-## for exploring what TIES look like
-# initial_dominants %>% mutate(id = paste0(site_code,'.',plot)) %>% 
-#   group_by(id) %>% filter(n() > 1) %>% 
-#   dplyr::select(site_code,plot,Taxon,initial_rel_cover) %>% print(n=400) 
-# ## certainly seems that some sites are more likely to have 'ties' than others.
-# ## Trying to cast forward to select 'dominant' introduces bias in subsequent analysis, but is that problematic?
-# 
-# initial_dominants %>% mutate(id = paste0(site_code,'.',plot)) %>% 
-#   group_by(id) %>% filter(n() > 1) %>% 
-#   left_join(.,working_coverdat %>% filter(year_trt == 1) %>% 
-#               #mutate(id = paste0(site_code,'.',plot)) %>% 
-#               ungroup() %>% 
-#               dplyr::select(site_code,plot,Taxon,max_cover),
-#             by = c('site_code','plot','Taxon')
-#             ) %>% 
-#   slice_max(order_by = max_cover,with_ties = TRUE) %>% 
-#   group_by(id) %>% filter(n() > 1) %>% 
-#   dplyr::select(site_code,plot,Taxon,initial_rel_cover) %>% print(n=400) 
-### 19 repeats remain in year 2
-### Going to keep repeats for now. Will need to repair code down the line
 
 
 ## merge to multi-year data and expand grid to include zero for years where spp is missing
 dominant_year <- droplevels(initial_dominants[,c('site_code','plot','Taxon')]) %>% 
   left_join(working_coverdat[,c('site_code','plot','Taxon','cover','max_cover','rank','perc_rank','year_trt','max_year')],by = c('site_code','plot','Taxon')) %>% 
-  # group_by(site_code, plot) %>% 
-  # complete(year_trt = 0:max_year,nesting(Taxon,max_year), fill = list(cover =0, max_cover = 0, perc_rank=0)) %>%  # this adds about 3000 0 entries (from 20,000 filled in)
   filter(!is.na(site_code))
-# 23586
-
 
 ## some sites skipped a sampling year, need to weed those years out (will be all zeros now)
 zero_year <- dominant_year %>% 
@@ -332,25 +281,9 @@ dominant_year <- dominant_year %>%
        filter(!duplicated(temp_id))), by = c('site_code','year_trt','Taxon')) %>% 
   mutate(plotfreq_yr = ifelse(is.na(plotfreq_yr),0,plotfreq_yr))
 
-
-# 23171 with multiple initial dominants and Bakker fixs
-
 scale_col <- function(x){
   (x - mean(x, na.rm=TRUE)) / sd(x, na.rm=TRUE)
 }
-
-# comb_soil <- comb %>% 
-#   dplyr::select(c('site_code','year_trt',"pct_C",'pct_N','ppm_P','ppm_K','ppm_Ca')) %>% 
-#   filter(year_trt == 0) %>% 
-#   mutate(c = scale_col(pct_C),n = scale_col(pct_N),p = scale_col(ppm_P),
-#          k = scale_col(ppm_K), ca = scale_col(ppm_Ca)) %>%
-#   group_by(site_code) %>% 
-#   summarize(c = var(c, na.rm = TRUE),
-#             n = var(n, na.rm = TRUE),
-#             p = var(p, na.rm = TRUE),
-#             k = var(k, na.rm = TRUE),
-#             ca = var(ca, na.rm = TRUE)) %>% 
-#   mutate(soil_var = rowMeans(dplyr::select(.,c(c,n,p,k,ca)),na.rm = TRUE))
 
 ### put it all together
 dominant_pop <- initial_dominants %>% 
@@ -368,10 +301,8 @@ dominant_pop <- initial_dominants %>%
   filter(trt %in% c('Control','NPK','Fence','NPK+Fence')) %>% 
   mutate(NPK = if_else(trt %in% c('NPK','NPK+Fence'),1,0), Fence = if_else(trt %in% c('Fence','NPK+Fence'),1,0))
 
-#9126 records of initial dominants through time
 
 # Can we fill in missing lifespan/provenance/func_group?
-
 dominant_pop[dominant_pop$local_lifespan == 'NULL',] # 305
 
 unique(dominant_pop$Taxon[dominant_pop$local_lifespan == 'NULL']) # 5
@@ -381,6 +312,7 @@ dominant_pop[dominant_pop$Taxon %in% c('DAUCUS CAROTA'),]$local_lifespan <- 'BIE
 
 #for now. poa sp. at koffler is likely perennial (poa pratensis or trivialis)
 dominant_pop$local_lifespan <- ifelse(dominant_pop$local_lifespan %in% c('PERENNIAL','INDETERMINATE','NULL'), 'PERENNIAL','ANNUAL')
+table(dominant_pop$local_lifespan)
 dominant_pop$functional_group <- ifelse(dominant_pop$functional_group %in% c('GRASS','GRAMINOID'), 'GRAMINOID',dominant_pop$functional_group)
 
 #provenance
@@ -476,14 +408,7 @@ unique(dominant_pop$Taxon[dominant_pop$functional_group == 'GRAMINOID']) #127
 unique(dominant_pop$Taxon[dominant_pop$functional_group == 'FORB']) #89
 
 
-### 7778 as of 2022-02-02
-### 8908 with multiple initial dominants as of 2022-07-30
-### 9126 with multiple initial dominants as of 2022-10-19
-### 9118 with multiple initial dominants as of 2022-12-09
-
-
 ### add year 0 site richness
-
 dominant_pop <- left_join(dominant_pop, 
                               working_coverdat %>% 
                                 filter(year_trt == 0, live == 1, !Taxon %in% c('LICHEN','BRYOPHYTE')) %>% 
@@ -491,12 +416,10 @@ dominant_pop <- left_join(dominant_pop,
                                 distinct(Taxon) %>% 
                                 summarize(site_rich_0 = n()),
                               by = 'site_code')
-
-
 # write.csv(dominant_pop,
-#           paste0('/Users/wilf0020/Library/Mobile Documents/com~apple~CloudDocs/Documents/NutNet manuscripts/Initial dominance/Project/initial-dominance/Data/Dominants-through-time_',
-#           Sys.Date(),'.csv'),
-#           row.names = F)
+#                    paste0('Dominants-through-time_',
+#                    Sys.Date(),'.csv'),
+#                   row.names = F)
 
 ### create site charactersistics table
 
@@ -508,6 +431,5 @@ site_tab <- comb %>% filter(site_code %in% dominant_pop$site_code) %>%
   left_join(.,dominant_pop %>% group_by(site_code) %>% distinct(site_code,.keep_all = TRUE) %>% dplyr::select(site_code,site_rich_0),
             by='site_code')
 
-# write_csv(site_tab,
-#          '/Users/wilf0020/Library/Mobile Documents/com~apple~CloudDocs/Documents/NutNet manuscripts/Initial dominance/Project/initial-dominance/Data/site_table.csv'
-# )
+# write_csv(site_tab,'site_table.csv')
+
