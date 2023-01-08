@@ -281,10 +281,6 @@ dominant_year <- dominant_year %>%
        filter(!duplicated(temp_id))), by = c('site_code','year_trt','Taxon')) %>% 
   mutate(plotfreq_yr = ifelse(is.na(plotfreq_yr),0,plotfreq_yr))
 
-scale_col <- function(x){
-  (x - mean(x, na.rm=TRUE)) / sd(x, na.rm=TRUE)
-}
-
 ### put it all together
 dominant_pop <- initial_dominants %>% 
   #mutate(id = paste(site_code,plot,Taxon,sep='.')) %>% 
