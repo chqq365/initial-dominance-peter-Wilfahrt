@@ -25,7 +25,6 @@ library(gridExtra)
 library(grid)
 
 
-
 # create graphics parameters/aesthetics
 theme_figs <- theme_classic() +
   theme(axis.title = element_text(size = 24), axis.text = element_text(size = 24),
@@ -68,7 +67,9 @@ summary.tablefunc <- function(mod) {
 
 
 #read in data
-dominant_pop <- read_csv('./Data/Dominants-through-time_2022-11-17.csv')
+setwd("H:/other NutNet papers/peter Wilfahrt/")
+
+dominant_pop <- read_csv('Dominants-through-time_2023-01-08.csv')
 dominant_pop # take a look
 
 # create nice labels
@@ -111,6 +112,7 @@ dominant_pop$func_simple <- ifelse(dominant_pop$functional_group == 'GRAMINOID',
 
 dom_complete <- dominant_pop %>% filter(local_provenance != 'UNK')
 
+# why block was not included in your model 
 mod_rank <- lme(rank_logit ~ year_trt * initial_rel_cover * NPK * Fence +
                                    local_lifespan * year_trt * NPK * Fence  +
                                    local_provenance * year_trt * NPK * Fence  +
@@ -124,7 +126,8 @@ mod_rank <- lme(rank_logit ~ year_trt * initial_rel_cover * NPK * Fence +
 
 # check normality of residuals
 qqnorm(residuals(mod_rank)) #looks fine
-
+plot(mod_rank) 
+# QC: check model fit, model does not fit the data well 
 
  # create summary table
 rank_table <- summary.tablefunc(mod_rank)
@@ -145,9 +148,6 @@ rank_table
 cor(dominant_pop[!duplicated(dominant_pop$site_code) == FALSE,c('MAP_v2','site_richness','MAP_VAR_v2','MAT_v2')])
 
 r.squaredGLMM(mod_rank)
-# 
-#         R2m      R2c
-# [1,] 0.2348573 0.550643
 
 # write_csv(rank_table,
 #           paste0('./Tables/rank-decay-logit-table_',
@@ -189,6 +189,8 @@ aic.tab <- data.frame(Predictor = c('Full Model','Initial Cover','Lifespan','Pro
   mutate(deltaAIC = round(AIC - AIC[1],1))
                          
 aic.tab
+# QC: mod.map has the lowest aic
+plot(mod.map)
                          
 # to add pseudo-r2
                          # R2 = c(r.squaredGLMM(mod_rank)[1],r.squaredGLMM(mod.cov)[1],r.squaredGLMM(mod.life)[1],r.squaredGLMM(mod.prov)[1],r.squaredGLMM(mod.func)[1],
@@ -234,6 +236,8 @@ rank_table %>% filter(Effect %in% grep('lifespan',rank_table$Effect, value = TRU
 ### all sig
 
 ### get model estimates at specified covariate levels
+# QC: according to your model selection process, the model without MAP(?) has the lowest AIC, and therefore should be the final model
+# but below you estimate parameters using the original model 
 rank_life_emm <- data.frame(summary(emmeans(mod_rank, pairwise ~ NPK * Fence | local_lifespan * year_trt,
                                             at = list(year_trt = seq(from = 0, to = 15, by = 1)),
                                             cov.reduce = TRUE,
@@ -330,6 +334,7 @@ gg_rank_year_prov_trt
 
 rank_table %>% filter(Effect %in% grep('func',rank_table$Effect, value = TRUE))
 ### only fence is sig
+##QC: from what I see, several terms are significant 
 
 rank_func_emm <- data.frame(summary(emmeans(mod_rank, pairwise ~ NPK * Fence | func_simple * year_trt,
                                             at = list(year_trt = seq(from = 0, to = 15, by = 1)),
@@ -716,6 +721,7 @@ inertia_init <- data.frame(summary(emmeans(mod_rank, pairwise ~ NPK * Fence | in
   rename(Predictor = 1) 
 
 inertia_init
+# qc: error 
 
 map.low <- lower(dom_complete$MAP_v2)
 map.high <- upper(dom_complete$MAP_v2)
